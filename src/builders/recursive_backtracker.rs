@@ -42,6 +42,9 @@ impl RecursiveBacktracker {
 }
 
 impl BuildStrategy for RecursiveBacktracker {
+    fn name(&self) -> &str {
+        "Recursive Backtracker"
+    }
     fn done(&self) -> bool {
         self.done
     }

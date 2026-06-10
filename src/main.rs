@@ -6,7 +6,7 @@ mod viewers;
 
 use std::{
     cell::RefCell,
-    io::{self, Read},
+    io::{self, Read, Write},
     process::{Command, Stdio},
     thread,
     time::Duration,
@@ -48,12 +48,19 @@ impl RawModeGuard {
         STTY_STATE.with(|state| {
             *state.borrow_mut() = Some(saved);
         });
+
+        let mut stdout = io::stdout().lock();
+        write!(stdout, "\x1b[?25l")?;
+        stdout.flush()?;
+        drop(stdout);
+
         Ok(Self)
     }
 }
 
 impl Drop for RawModeGuard {
     fn drop(&mut self) {
+        let _ = write!(io::stdout(), "\x1b[?25h");
         STTY_STATE.with(|state| {
             if let Some(saved) = state.borrow_mut().take() {
                 let _ = Command::new("stty").arg(saved).status();
@@ -171,6 +178,16 @@ fn skip_one_second_solve(
     Ok(())
 }
 
+fn footer_left(phase: &str, strat: &str, paused: bool) -> String {
+    let pause_tag = if paused { "  [PAUSED]" } else { "" };
+    format!("{phase}: {strat}{pause_tag}")
+}
+
+fn footer_right(steps: usize, sleep: Duration) -> String {
+    let fps = (1.0 / sleep.as_secs_f64()).round() as usize;
+    format!("{steps} steps/tick  ·  {fps} fps")
+}
+
 fn main() -> io::Result<()> {
     let config = Config::from_args()?;
     let _raw_mode = RawModeGuard::new()?;
@@ -186,6 +203,11 @@ fn main() -> io::Result<()> {
 
         viewer.clear_screen()?;
         viewer.print(&maze)?;
+        viewer.print_footer(
+            &maze,
+            &footer_left("Building", builder.name(), paused),
+            &footer_right(config.build_steps, config.build_sleep),
+        )?;
 
         // Build phase
         while !builder.done() {
@@ -193,7 +215,14 @@ fn main() -> io::Result<()> {
                 match sleep_and_read(Duration::ZERO, true)? {
                     Input::Quit => break 'outer,
                     Input::NewMaze => continue 'outer,
-                    Input::TogglePause => paused = false,
+                    Input::TogglePause => {
+                        paused = false;
+                        viewer.print_footer(
+                            &maze,
+                            &footer_left("Building", builder.name(), paused),
+                            &footer_right(config.build_steps, config.build_sleep),
+                        )?;
+                    }
                     Input::SkipSecond => {
                         skip_one_second_build(
                             &config,
@@ -236,7 +265,14 @@ fn main() -> io::Result<()> {
             match sleep_and_read(config.build_sleep, false)? {
                 Input::Quit => break 'outer,
                 Input::NewMaze => continue 'outer,
-                Input::TogglePause => paused = true,
+                Input::TogglePause => {
+                    paused = true;
+                    viewer.print_footer(
+                        &maze,
+                        &footer_left("Building", builder.name(), paused),
+                        &footer_right(config.build_steps, config.build_sleep),
+                    )?;
+                }
                 Input::SkipSecond => {
                     skip_one_second_build(&config, builder.as_mut(), &mut maze, viewer.as_ref())?
                 }
@@ -246,6 +282,11 @@ fn main() -> io::Result<()> {
 
         let mut solver = build_solver(&maze);
         overlay.clear();
+        viewer.print_footer(
+            &maze,
+            &footer_left("Solving", solver.name(), paused),
+            &footer_right(config.solve_steps, config.solve_sleep),
+        )?;
 
         // Solve phase
         while !solver.done() {
@@ -253,7 +294,14 @@ fn main() -> io::Result<()> {
                 match sleep_and_read(Duration::ZERO, true)? {
                     Input::Quit => break 'outer,
                     Input::NewMaze => continue 'outer,
-                    Input::TogglePause => paused = false,
+                    Input::TogglePause => {
+                        paused = false;
+                        viewer.print_footer(
+                            &maze,
+                            &footer_left("Solving", solver.name(), paused),
+                            &footer_right(config.solve_steps, config.solve_sleep),
+                        )?;
+                    }
                     Input::SkipSecond => {
                         skip_one_second_solve(
                             &config,
@@ -297,7 +345,14 @@ fn main() -> io::Result<()> {
             match sleep_and_read(config.solve_sleep, false)? {
                 Input::Quit => break 'outer,
                 Input::NewMaze => continue 'outer,
-                Input::TogglePause => paused = true,
+                Input::TogglePause => {
+                    paused = true;
+                    viewer.print_footer(
+                        &maze,
+                        &footer_left("Solving", solver.name(), paused),
+                        &footer_right(config.solve_steps, config.solve_sleep),
+                    )?;
+                }
                 Input::SkipSecond => skip_one_second_solve(
                     &config,
                     solver.as_mut(),
@@ -308,6 +363,12 @@ fn main() -> io::Result<()> {
                 Input::Advance | Input::None => {}
             }
         }
+
+        viewer.print_footer(
+            &maze,
+            &format!("Complete  ·  {} → {}", builder.name(), solver.name()),
+            "",
+        )?;
 
         match sleep_and_read(config.wait, paused)? {
             Input::Quit => break 'outer,

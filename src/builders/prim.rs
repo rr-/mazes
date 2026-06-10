@@ -57,6 +57,9 @@ impl PrimGen {
 }
 
 impl BuildStrategy for PrimGen {
+    fn name(&self) -> &str {
+        "Prim's"
+    }
     fn done(&self) -> bool {
         self.done
     }

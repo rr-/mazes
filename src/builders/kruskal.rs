@@ -102,6 +102,9 @@ impl KruskalGen {
 }
 
 impl BuildStrategy for KruskalGen {
+    fn name(&self) -> &str {
+        "Kruskal's"
+    }
     fn done(&self) -> bool {
         self.idx >= self.edges.len()
     }

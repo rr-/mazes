@@ -196,4 +196,8 @@ impl MazeView for HalfBlockMazeViewer {
         let points = compress_half_block_points(overlay_update_points(maze, overlay, cells));
         update_half_block_buffer(&self.viewport, &buf, points)
     }
+
+    fn print_footer(&self, maze: &Maze, left: &str, right: &str) -> io::Result<()> {
+        self.viewport.print_footer(maze.h + 1, left, right)
+    }
 }

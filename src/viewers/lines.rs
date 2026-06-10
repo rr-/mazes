@@ -253,4 +253,8 @@ impl MazeView for LineMazeViewer {
         write!(stdout, "\x1b[{};1H", self.viewport.row + maze.h * 2 + 1)?;
         stdout.flush()
     }
+
+    fn print_footer(&self, maze: &Maze, left: &str, right: &str) -> io::Result<()> {
+        self.viewport.print_footer(maze.h * 2 + 1, left, right)
+    }
 }

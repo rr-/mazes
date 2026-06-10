@@ -43,6 +43,9 @@ impl BinaryTree {
 }
 
 impl BuildStrategy for BinaryTree {
+    fn name(&self) -> &str {
+        "Binary Tree"
+    }
     fn done(&self) -> bool {
         self.done
     }

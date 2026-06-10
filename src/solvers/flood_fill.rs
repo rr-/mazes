@@ -37,6 +37,9 @@ impl FloodFillSolver {
 }
 
 impl SolveStrategy for FloodFillSolver {
+    fn name(&self) -> &str {
+        "Flood Fill"
+    }
     fn done(&self) -> bool {
         self.finished
     }

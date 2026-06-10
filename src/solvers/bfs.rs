@@ -81,6 +81,9 @@ impl BfsSolver {
 }
 
 impl SolveStrategy for BfsSolver {
+    fn name(&self) -> &str {
+        "BFS"
+    }
     fn done(&self) -> bool {
         self.finished
     }

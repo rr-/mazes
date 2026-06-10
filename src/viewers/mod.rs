@@ -21,6 +21,7 @@ pub(crate) trait MazeView {
         overlay: &MazeOverlay,
         cells: Vec<Vec2i>,
     ) -> io::Result<()>;
+    fn print_footer(&self, maze: &Maze, left: &str, right: &str) -> io::Result<()>;
 }
 
 pub(crate) fn build_viewer(style: RenderStyle) -> Box<dyn MazeView> {
@@ -109,6 +110,29 @@ impl TerminalViewport {
             }
         }
         write!(stdout, "\x1b[{};1H", self.row + buf.len())?;
+        stdout.flush()
+    }
+
+    pub(crate) fn print_footer(
+        &self,
+        footer_row: usize,
+        left: &str,
+        right: &str,
+    ) -> io::Result<()> {
+        let term_cols = terminal_size()
+            .map(|(Width(w), _)| w as usize)
+            .unwrap_or(80);
+        let right_col = term_cols.saturating_sub(right.len()) + 1;
+        let mut stdout = io::stdout().lock();
+        write!(
+            stdout,
+            "\x1b[{};1H\x1b[2K{}\x1b[{};{}H{}",
+            self.row + footer_row,
+            left,
+            self.row + footer_row,
+            right_col,
+            right
+        )?;
         stdout.flush()
     }
 

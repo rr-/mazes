@@ -41,6 +41,9 @@ impl DfsSolver {
 }
 
 impl SolveStrategy for DfsSolver {
+    fn name(&self) -> &str {
+        "DFS"
+    }
     fn done(&self) -> bool {
         self.finished
     }

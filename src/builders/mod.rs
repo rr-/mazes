@@ -9,6 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::types::{Maze, Vec2i};
 
 pub(crate) trait BuildStrategy {
+    fn name(&self) -> &str;
     fn done(&self) -> bool;
     fn step(&mut self, maze: &mut Maze) -> Vec<Vec2i>;
 }

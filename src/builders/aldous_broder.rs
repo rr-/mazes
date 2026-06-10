@@ -44,6 +44,9 @@ impl AldousBroder {
 }
 
 impl BuildStrategy for AldousBroder {
+    fn name(&self) -> &str {
+        "Aldous-Broder"
+    }
     fn done(&self) -> bool {
         self.done
     }

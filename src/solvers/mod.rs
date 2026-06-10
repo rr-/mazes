@@ -14,6 +14,7 @@ pub(crate) const ALL_DIRS: [crate::types::Dir; 4] = [
 ];
 
 pub(crate) trait SolveStrategy {
+    fn name(&self) -> &str;
     fn done(&self) -> bool;
     fn step(&mut self, maze: &Maze, overlay: &mut MazeOverlay) -> Vec<Vec2i>;
 }
