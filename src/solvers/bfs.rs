@@ -1,6 +1,39 @@
 use std::collections::VecDeque;
 
 use super::{ALL_DIRS, SolveStrategy, advance_reveal};
+
+#[cfg(test)]
+mod tests {
+    use super::BfsSolver;
+    use crate::builders::{BuildStrategy, recursive_backtracker::RecursiveBacktracker};
+    use crate::solvers::test_util::solve_to_completion;
+    use crate::types::Maze;
+
+    fn build_maze(seed: u32) -> Maze {
+        let mut maze = Maze::new(8, 8);
+        let mut builder = RecursiveBacktracker::new_with_seed(&maze, seed);
+        while !builder.done() {
+            builder.step(&mut maze);
+        }
+        maze
+    }
+
+    #[test]
+    fn bfs_finds_solution() {
+        let maze = build_maze(0xDEAD_BEEF);
+        solve_to_completion(Box::new(BfsSolver::new(&maze)), &maze);
+    }
+
+    #[test]
+    fn bfs_solution_is_shortest_path() {
+        // BFS guarantees shortest path — verify length <= DFS length on same maze
+        use crate::solvers::dfs::DfsSolver;
+        let maze = build_maze(0x1234_5678);
+        let bfs_path = solve_to_completion(Box::new(BfsSolver::new(&maze)), &maze);
+        let dfs_path = solve_to_completion(Box::new(DfsSolver::new(&maze)), &maze);
+        assert!(bfs_path.len() <= dfs_path.len());
+    }
+}
 use crate::types::{CellMark, Maze, MazeOverlay, Vec2i};
 
 pub(crate) struct BfsSolver {

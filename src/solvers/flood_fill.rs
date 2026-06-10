@@ -1,6 +1,29 @@
 use std::collections::VecDeque;
 
 use super::{ALL_DIRS, SolveStrategy, advance_reveal};
+
+#[cfg(test)]
+mod tests {
+    use super::FloodFillSolver;
+    use crate::builders::{BuildStrategy, recursive_backtracker::RecursiveBacktracker};
+    use crate::solvers::test_util::solve_to_completion;
+    use crate::types::Maze;
+
+    fn build_maze(seed: u32) -> Maze {
+        let mut maze = Maze::new(8, 8);
+        let mut builder = RecursiveBacktracker::new_with_seed(&maze, seed);
+        while !builder.done() {
+            builder.step(&mut maze);
+        }
+        maze
+    }
+
+    #[test]
+    fn flood_fill_finds_solution() {
+        let maze = build_maze(0xABCD_1234);
+        solve_to_completion(Box::new(FloodFillSolver::new(&maze)), &maze);
+    }
+}
 use crate::types::{CellMark, Maze, MazeOverlay, Vec2i};
 
 pub(crate) struct FloodFillSolver {

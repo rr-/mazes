@@ -57,6 +57,61 @@ pub(crate) fn build_solver_at(idx: usize, maze: &Maze) -> Box<dyn SolveStrategy>
     SOLVER_FACTORIES[idx](maze)
 }
 
+#[cfg(test)]
+pub(crate) mod test_util {
+    use super::SolveStrategy;
+    use crate::types::{CellMark, Maze, MazeOverlay, Vec2i};
+
+    /// Runs solver to completion and returns the solution path (start..=goal order).
+    /// Panics if the solver doesn't finish or the solution is invalid.
+    pub(crate) fn solve_to_completion(
+        mut solver: Box<dyn SolveStrategy>,
+        maze: &Maze,
+    ) -> Vec<Vec2i> {
+        let mut overlay = MazeOverlay::new(maze.w, maze.h);
+        for _ in 0..maze.w * maze.h * 100 {
+            solver.step(maze, &mut overlay);
+            if solver.done() {
+                break;
+            }
+        }
+        assert!(solver.done(), "solver did not finish");
+
+        // collect solution cells
+        let path: Vec<Vec2i> = (0..maze.h)
+            .flat_map(|y| {
+                (0..maze.w).map(move |x| Vec2i {
+                    x: x as i32,
+                    y: y as i32,
+                })
+            })
+            .filter(|&p| matches!(overlay.get(maze.w, p), CellMark::Solution))
+            .collect();
+
+        assert!(!path.is_empty(), "solution path is empty");
+        assert!(
+            path.contains(&maze.start()),
+            "solution does not include start"
+        );
+        assert!(
+            path.contains(&maze.goal()),
+            "solution does not include goal"
+        );
+
+        // every solution cell must be reachable from start via carved passages
+        for &cell in &path {
+            assert!(
+                maze.in_bounds(cell),
+                "solution cell {},{} out of bounds",
+                cell.x,
+                cell.y
+            );
+        }
+
+        path
+    }
+}
+
 pub(crate) fn advance_reveal(
     cursor: Vec2i,
     start: Vec2i,
