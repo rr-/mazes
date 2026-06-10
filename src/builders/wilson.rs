@@ -1,14 +1,6 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use super::BuildStrategy;
-use crate::types::{Dir, Maze, Vec2i};
-
-fn xorshift(seed: &mut u32) -> u32 {
-    *seed ^= *seed << 13;
-    *seed ^= *seed >> 17;
-    *seed ^= *seed << 5;
-    *seed
-}
+use crate::rng::{time_seed, xorshift};
+use crate::types::{ALL_DIRS, Dir, Maze, Vec2i};
 
 fn dir_between(from: Vec2i, to: Vec2i) -> Dir {
     match (to.x - from.x, to.y - from.y) {
@@ -18,8 +10,6 @@ fn dir_between(from: Vec2i, to: Vec2i) -> Dir {
         _ => Dir::N,
     }
 }
-
-const ALL_DIRS: [Dir; 4] = [Dir::N, Dir::E, Dir::S, Dir::W];
 
 /// Loop-erased random walk. Produces a uniform spanning tree (same distribution as Aldous-Broder)
 /// but is much faster on average: starts slow, accelerates as the maze fills.
@@ -36,11 +26,7 @@ pub(crate) struct WilsonGen {
 
 impl WilsonGen {
     pub(crate) fn new(maze: &Maze) -> Self {
-        let seed = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .subsec_nanos();
-        Self::new_with_seed(maze, seed)
+        Self::new_with_seed(maze, time_seed())
     }
 
     pub(crate) fn new_with_seed(maze: &Maze, seed: u32) -> Self {
@@ -65,21 +51,15 @@ impl WilsonGen {
 
     fn random_unvisited(&mut self) -> Vec2i {
         let target = (xorshift(&mut self.seed) as usize) % self.unvisited;
-        let mut count = 0;
-        for y in 0..self.h {
-            for x in 0..self.w {
-                if !self.in_maze[y * self.w + x] {
-                    if count == target {
-                        return Vec2i {
-                            x: x as i32,
-                            y: y as i32,
-                        };
-                    }
-                    count += 1;
-                }
-            }
-        }
-        unreachable!()
+        (0..self.h)
+            .flat_map(|y| (0..self.w).map(move |x| (x, y)))
+            .filter(|&(x, y)| !self.in_maze[y * self.w + x])
+            .nth(target)
+            .map(|(x, y)| Vec2i {
+                x: x as i32,
+                y: y as i32,
+            })
+            .expect("unvisited counter desync")
     }
 }
 

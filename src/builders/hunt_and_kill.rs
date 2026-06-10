@@ -1,16 +1,6 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use super::BuildStrategy;
-use crate::types::{Dir, Maze, Vec2i};
-
-fn xorshift(seed: &mut u32) -> u32 {
-    *seed ^= *seed << 13;
-    *seed ^= *seed >> 17;
-    *seed ^= *seed << 5;
-    *seed
-}
-
-const ALL_DIRS: [Dir; 4] = [Dir::N, Dir::E, Dir::S, Dir::W];
+use crate::rng::{shuffle_dirs, time_seed};
+use crate::types::{ALL_DIRS, Maze, Vec2i};
 
 /// Random walk that "hunts" for a new entry point when stuck.
 /// Produces long winding corridors like Recursive Backtracker but with a
@@ -26,11 +16,7 @@ pub(crate) struct HuntAndKill {
 
 impl HuntAndKill {
     pub(crate) fn new(maze: &Maze) -> Self {
-        let seed = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .subsec_nanos();
-        Self::new_with_seed(maze, seed)
+        Self::new_with_seed(maze, time_seed())
     }
 
     pub(crate) fn new_with_seed(maze: &Maze, seed: u32) -> Self {
@@ -63,12 +49,7 @@ impl BuildStrategy for HuntAndKill {
 
         if let Some(current) = self.current {
             // Kill phase: random-walk to an unvisited neighbor
-            let mut dirs = ALL_DIRS;
-            for i in (1..4).rev() {
-                let j = (xorshift(&mut self.seed) as usize) % (i + 1);
-                dirs.swap(i, j);
-            }
-            for dir in dirs {
+            for dir in shuffle_dirs(&mut self.seed) {
                 let next = maze.neighbor(current, dir);
                 if maze.in_bounds(next) && !self.visited[maze.idx(next)] {
                     self.visited[maze.idx(next)] = true;

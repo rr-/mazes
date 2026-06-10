@@ -81,13 +81,6 @@ impl LineMazeViewer {
     }
 }
 
-fn overlay_char(mark: CellMark) -> char {
-    match mark {
-        CellMark::None => ' ',
-        CellMark::Active | CellMark::Dead | CellMark::Solution => ' ',
-    }
-}
-
 fn overlay_color(mark: CellMark) -> &'static str {
     match mark {
         CellMark::None => "\x1b[0m",
@@ -223,7 +216,6 @@ impl MazeView for LineMazeViewer {
             }
 
             let color = overlay_color(mark);
-            let glyph = overlay_char(mark);
             let gy = (cell.y as usize) * 2 + 1;
             let gx = (cell.x as usize) * 2 + 1;
             if let Some(parent) = overlay.parent(maze.w, cell) {
@@ -237,7 +229,7 @@ impl MazeView for LineMazeViewer {
                     self.viewport.row + wall_y,
                     self.viewport.col + wall_x,
                     color,
-                    glyph
+                    ' '
                 )?;
             }
             write!(
@@ -246,7 +238,7 @@ impl MazeView for LineMazeViewer {
                 self.viewport.row + gy,
                 self.viewport.col + gx,
                 color,
-                glyph
+                ' '
             )?;
         }
 

@@ -1,16 +1,6 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use super::BuildStrategy;
-use crate::types::{Dir, Maze, Vec2i};
-
-fn xorshift(seed: &mut u32) -> u32 {
-    *seed ^= *seed << 13;
-    *seed ^= *seed >> 17;
-    *seed ^= *seed << 5;
-    *seed
-}
-
-const ALL_DIRS: [Dir; 4] = [Dir::N, Dir::E, Dir::S, Dir::W];
+use crate::rng::{shuffle_dirs, time_seed, xorshift};
+use crate::types::{Maze, Vec2i};
 
 /// Maintains a growing set of active cells and picks from it each step.
 /// Picking newest → DFS (same as Recursive Backtracker).
@@ -26,11 +16,7 @@ pub(crate) struct GrowingTree {
 
 impl GrowingTree {
     pub(crate) fn new(maze: &Maze) -> Self {
-        let seed = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .subsec_nanos();
-        Self::new_with_seed(maze, seed)
+        Self::new_with_seed(maze, time_seed())
     }
 
     pub(crate) fn new_with_seed(maze: &Maze, seed: u32) -> Self {
@@ -69,13 +55,7 @@ impl BuildStrategy for GrowingTree {
 
             let cell = self.cells[pick_idx];
 
-            let mut dirs = ALL_DIRS;
-            for i in (1..4).rev() {
-                let j = (xorshift(&mut self.seed) as usize) % (i + 1);
-                dirs.swap(i, j);
-            }
-
-            let carved = dirs.into_iter().find_map(|dir| {
+            let carved = shuffle_dirs(&mut self.seed).into_iter().find_map(|dir| {
                 let neighbor = maze.neighbor(cell, dir);
                 if maze.in_bounds(neighbor) && !self.visited[maze.idx(neighbor)] {
                     Some((dir, neighbor))

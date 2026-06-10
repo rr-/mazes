@@ -1,14 +1,6 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use super::BuildStrategy;
+use crate::rng::{time_seed, xorshift};
 use crate::types::{Dir, Maze, Vec2i};
-
-fn xorshift(seed: &mut u32) -> u32 {
-    *seed ^= *seed << 13;
-    *seed ^= *seed >> 17;
-    *seed ^= *seed << 5;
-    *seed
-}
 
 /// For each cell, randomly carve either North or East (if available).
 /// Produces a strong NE-diagonal bias but is extremely fast.
@@ -23,11 +15,7 @@ pub(crate) struct BinaryTree {
 
 impl BinaryTree {
     pub(crate) fn new(maze: &Maze) -> Self {
-        let seed = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .subsec_nanos();
-        Self::new_with_seed(maze, seed)
+        Self::new_with_seed(maze, time_seed())
     }
 
     pub(crate) fn new_with_seed(maze: &Maze, seed: u32) -> Self {

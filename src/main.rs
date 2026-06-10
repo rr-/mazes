@@ -1,7 +1,9 @@
 mod builders;
 mod config;
+mod rng;
 mod solvers;
 mod types;
+mod util;
 mod viewers;
 
 use std::{
@@ -140,6 +142,100 @@ fn sleep_and_read(duration: Duration, paused: bool) -> io::Result<Input> {
     }
 }
 
+fn print_build_footer(
+    viewer: &dyn viewers::MazeView,
+    maze: &Maze,
+    builder: &dyn builders::BuildStrategy,
+    random_mode: bool,
+    paused: bool,
+    config: &Config,
+) -> io::Result<()> {
+    viewer.print_footer(
+        maze,
+        &footer_left("Building", builder.name(), random_mode, paused),
+        &footer_right(config.build_steps, config.build_sleep),
+    )
+}
+
+fn print_solve_footer(
+    viewer: &dyn viewers::MazeView,
+    maze: &Maze,
+    solver: &dyn SolveStrategy,
+    paused: bool,
+    config: &Config,
+) -> io::Result<()> {
+    viewer.print_footer(
+        maze,
+        &footer_left("Solving", solver.name(), false, paused),
+        &footer_right(config.solve_steps, config.solve_sleep),
+    )
+}
+
+fn tick_build(
+    config: &Config,
+    builder: &mut dyn builders::BuildStrategy,
+    maze: &mut Maze,
+    viewer: &dyn viewers::MazeView,
+    paused: bool,
+) -> io::Result<Input> {
+    if !paused {
+        let mut updated = Vec::new();
+        while updated.is_empty() {
+            for _ in 0..config.build_steps {
+                if builder.done() {
+                    break;
+                }
+                updated.extend(builder.step(maze));
+            }
+            if builder.done() {
+                break;
+            }
+        }
+        viewer.update_maze(maze, updated)?;
+    }
+    sleep_and_read(
+        if paused {
+            Duration::ZERO
+        } else {
+            config.build_sleep
+        },
+        paused,
+    )
+}
+
+fn tick_solve(
+    config: &Config,
+    solver: &mut dyn SolveStrategy,
+    maze: &Maze,
+    overlay: &mut MazeOverlay,
+    viewer: &dyn viewers::MazeView,
+    paused: bool,
+) -> io::Result<Input> {
+    if !paused {
+        let mut updated = Vec::new();
+        while updated.is_empty() {
+            for _ in 0..config.solve_steps {
+                if solver.done() {
+                    break;
+                }
+                updated.extend(solver.step(maze, overlay));
+            }
+            if solver.done() {
+                break;
+            }
+        }
+        viewer.update_overlay(maze, overlay, updated)?;
+    }
+    sleep_and_read(
+        if paused {
+            Duration::ZERO
+        } else {
+            config.solve_sleep
+        },
+        paused,
+    )
+}
+
 fn skip_one_second_build(
     config: &Config,
     builder: &mut dyn builders::BuildStrategy,
@@ -212,33 +308,35 @@ fn main() -> io::Result<()> {
     let mut builder_idx: Option<usize> = config.builder;
 
     // --- helpers that set up a fresh maze ---
-    let init_maze = |builder_idx: &mut Option<usize>,
-                     _random_mode: bool|
-     -> (Maze, MazeOverlay, Box<dyn builders::BuildStrategy>) {
-        let (w, h) = maze_size_from_terminal(config.style);
-        let maze = Maze::new(w, h);
-        let overlay = MazeOverlay::new(w, h);
-        let builder = match *builder_idx {
-            Some(idx) => build_builder_at(idx, &maze),
-            None => {
-                let (idx, b) = build_builder(&maze);
-                *builder_idx = Some(idx);
-                b
-            }
+    let init_maze =
+        |builder_idx: &mut Option<usize>| -> (Maze, MazeOverlay, Box<dyn builders::BuildStrategy>) {
+            let (w, h) = maze_size_from_terminal(config.style);
+            let maze = Maze::new(w, h);
+            let overlay = MazeOverlay::new(w, h);
+            let builder = match *builder_idx {
+                Some(idx) => build_builder_at(idx, &maze),
+                None => {
+                    let (idx, b) = build_builder(&maze);
+                    *builder_idx = Some(idx);
+                    b
+                }
+            };
+            (maze, overlay, builder)
         };
-        (maze, overlay, builder)
-    };
 
-    let (mut maze, mut overlay, mut builder) = init_maze(&mut builder_idx, random_mode);
+    let (mut maze, mut overlay, mut builder) = init_maze(&mut builder_idx);
     let mut solver: Option<Box<dyn SolveStrategy>> = None;
     let mut phase = Phase::Build;
 
     viewer.clear_screen()?;
     viewer.print(&maze)?;
-    viewer.print_footer(
+    print_build_footer(
+        viewer.as_ref(),
         &maze,
-        &footer_left("Building", builder.name(), random_mode, paused),
-        &footer_right(config.build_steps, config.build_sleep),
+        builder.as_ref(),
+        random_mode,
+        paused,
+        &config,
     )?;
 
     loop {
@@ -250,10 +348,12 @@ fn main() -> io::Result<()> {
             });
             overlay.clear();
             phase = Phase::Solve;
-            viewer.print_footer(
+            print_solve_footer(
+                viewer.as_ref(),
                 &maze,
-                &footer_left("Solving", solver.as_ref().unwrap().name(), false, paused),
-                &footer_right(config.solve_steps, config.solve_sleep),
+                solver.as_ref().unwrap().as_ref(),
+                paused,
+                &config,
             )?;
         }
         if phase == Phase::Solve && solver.as_ref().map_or(true, |s| s.done()) {
@@ -263,57 +363,21 @@ fn main() -> io::Result<()> {
 
         // --- One tick: step + render, then read input ---
         let input = match phase {
-            Phase::Build => {
-                if !paused {
-                    let mut updated = Vec::new();
-                    while updated.is_empty() {
-                        for _ in 0..config.build_steps {
-                            if builder.done() {
-                                break;
-                            }
-                            updated.extend(builder.step(&mut maze));
-                        }
-                        if builder.done() {
-                            break;
-                        }
-                    }
-                    viewer.update_maze(&maze, updated)?;
-                }
-                sleep_and_read(
-                    if paused {
-                        Duration::ZERO
-                    } else {
-                        config.build_sleep
-                    },
-                    paused,
-                )?
-            }
-            Phase::Solve => {
-                let solver = solver.as_mut().unwrap();
-                if !paused {
-                    let mut updated = Vec::new();
-                    while updated.is_empty() {
-                        for _ in 0..config.solve_steps {
-                            if solver.done() {
-                                break;
-                            }
-                            updated.extend(solver.step(&maze, &mut overlay));
-                        }
-                        if solver.done() {
-                            break;
-                        }
-                    }
-                    viewer.update_overlay(&maze, &overlay, updated)?;
-                }
-                sleep_and_read(
-                    if paused {
-                        Duration::ZERO
-                    } else {
-                        config.solve_sleep
-                    },
-                    paused,
-                )?
-            }
+            Phase::Build => tick_build(
+                &config,
+                builder.as_mut(),
+                &mut maze,
+                viewer.as_ref(),
+                paused,
+            )?,
+            Phase::Solve => tick_solve(
+                &config,
+                solver.as_mut().unwrap().as_mut(),
+                &maze,
+                &mut overlay,
+                viewer.as_ref(),
+                paused,
+            )?,
             Phase::Complete => sleep_and_read(config.wait, paused)?,
         };
 
@@ -354,15 +418,20 @@ fn main() -> io::Result<()> {
             Input::TogglePause => {
                 paused = !paused;
                 match phase {
-                    Phase::Build => viewer.print_footer(
+                    Phase::Build => print_build_footer(
+                        viewer.as_ref(),
                         &maze,
-                        &footer_left("Building", builder.name(), random_mode, paused),
-                        &footer_right(config.build_steps, config.build_sleep),
+                        builder.as_ref(),
+                        random_mode,
+                        paused,
+                        &config,
                     )?,
-                    Phase::Solve => viewer.print_footer(
+                    Phase::Solve => print_solve_footer(
+                        viewer.as_ref(),
                         &maze,
-                        &footer_left("Solving", solver.as_ref().unwrap().name(), false, paused),
-                        &footer_right(config.solve_steps, config.solve_sleep),
+                        solver.as_ref().unwrap().as_ref(),
+                        paused,
+                        &config,
                     )?,
                     Phase::Complete => {}
                 }
@@ -405,15 +474,18 @@ fn main() -> io::Result<()> {
         }
 
         if start_new_maze {
-            (maze, overlay, builder) = init_maze(&mut builder_idx, random_mode);
+            (maze, overlay, builder) = init_maze(&mut builder_idx);
             solver = None;
             phase = Phase::Build;
             viewer.clear_screen()?;
             viewer.print(&maze)?;
-            viewer.print_footer(
+            print_build_footer(
+                viewer.as_ref(),
                 &maze,
-                &footer_left("Building", builder.name(), random_mode, paused),
-                &footer_right(config.build_steps, config.build_sleep),
+                builder.as_ref(),
+                random_mode,
+                paused,
+                &config,
             )?;
         }
     }

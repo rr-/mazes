@@ -13,6 +13,8 @@ pub(crate) enum Dir {
     W,
 }
 
+pub(crate) const ALL_DIRS: [Dir; 4] = [Dir::N, Dir::E, Dir::S, Dir::W];
+
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub(crate) struct Vec2i {
     pub(crate) x: i32,
@@ -145,18 +147,15 @@ impl Maze {
     pub(crate) fn has_wall(&self, p: Vec2i, d: Dir) -> bool {
         self.grid[self.idx(p)].wall[d as usize]
     }
-}
 
-pub(crate) fn normalize_name(name: &str) -> String {
-    let name = name
-        .strip_suffix("'s")
-        .or_else(|| name.strip_suffix('\u{2019}'))
-        .unwrap_or(name);
-    name.chars()
-        .filter(|c| c.is_alphanumeric() || c.is_whitespace() || *c == '-')
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join("-")
-        .to_lowercase()
+    pub(crate) fn start(&self) -> Vec2i {
+        Vec2i { x: 0, y: 0 }
+    }
+
+    pub(crate) fn goal(&self) -> Vec2i {
+        Vec2i {
+            x: self.w as i32 - 1,
+            y: self.h as i32 - 1,
+        }
+    }
 }

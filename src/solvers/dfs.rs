@@ -1,4 +1,4 @@
-use super::{ALL_DIRS, SolveStrategy};
+use super::{ALL_DIRS, SolveStrategy, advance_reveal};
 use crate::types::{CellMark, Maze, MazeOverlay, Vec2i};
 
 struct DfsFrame {
@@ -18,11 +18,8 @@ pub(crate) struct DfsSolver {
 
 impl DfsSolver {
     pub(crate) fn new(maze: &Maze) -> Self {
-        let start = Vec2i { x: 0, y: 0 };
-        let goal = Vec2i {
-            x: maze.w as i32 - 1,
-            y: maze.h as i32 - 1,
-        };
+        let start = maze.start();
+        let goal = maze.goal();
         let mut discovered = vec![false; maze.w * maze.h];
         discovered[maze.idx(start)] = true;
         Self {
@@ -54,13 +51,9 @@ impl SolveStrategy for DfsSolver {
         }
 
         if let Some(cursor) = self.reveal_cursor {
-            overlay.set(maze.w, cursor, CellMark::Solution);
-            if cursor == self.start {
-                self.reveal_cursor = None;
-                self.finished = true;
-            } else {
-                self.reveal_cursor = self.parent[maze.idx(cursor)];
-            }
+            let (next, done) = advance_reveal(cursor, self.start, &self.parent, maze, overlay);
+            self.reveal_cursor = next;
+            self.finished = done;
             return vec![cursor];
         }
 

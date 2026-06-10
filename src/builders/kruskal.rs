@@ -1,24 +1,16 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use super::BuildStrategy;
+use crate::rng::{time_seed, xorshift};
 use crate::types::{Dir, Edge, Maze, Vec2i};
 
 fn shuffle_with_seed<T>(arr: &mut [T], mut seed: u32) {
     for i in (1..arr.len()).rev() {
-        seed ^= seed << 13;
-        seed ^= seed >> 17;
-        seed ^= seed << 5;
-        let j = (seed as usize) % (i + 1);
+        let j = (xorshift(&mut seed) as usize) % (i + 1);
         arr.swap(i, j);
     }
 }
 
 fn shuffle<T>(arr: &mut [T]) {
-    let seed = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .subsec_nanos();
-    shuffle_with_seed(arr, seed);
+    shuffle_with_seed(arr, time_seed());
 }
 
 struct Dsu {

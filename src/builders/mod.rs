@@ -12,9 +12,9 @@ pub(crate) mod sidewinder;
 pub(crate) mod spiral_backtracker;
 pub(crate) mod wilson;
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
-use crate::types::{Maze, Vec2i, normalize_name};
+use crate::rng::time_seed;
+use crate::types::{Maze, Vec2i};
+use crate::util::normalize_name;
 
 pub(crate) trait BuildStrategy {
     fn name(&self) -> &str;
@@ -93,11 +93,7 @@ const BUILDER_FACTORIES: [BuilderFactory; 13] = [
 ];
 
 fn random_index(len: usize) -> usize {
-    let seed = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .subsec_nanos();
-    (seed as usize) % len
+    (time_seed() as usize) % len
 }
 
 pub(crate) fn builder_count() -> usize {
@@ -105,7 +101,7 @@ pub(crate) fn builder_count() -> usize {
 }
 
 pub(crate) fn build_builder_at(idx: usize, maze: &Maze) -> Box<dyn BuildStrategy> {
-    BUILDER_FACTORIES[idx % BUILDER_FACTORIES.len()](maze)
+    BUILDER_FACTORIES[idx](maze)
 }
 
 pub(crate) fn build_builder(maze: &Maze) -> (usize, Box<dyn BuildStrategy>) {

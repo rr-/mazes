@@ -2,16 +2,11 @@ pub(crate) mod bfs;
 pub(crate) mod dfs;
 pub(crate) mod flood_fill;
 
-use std::time::{SystemTime, UNIX_EPOCH};
+use crate::rng::time_seed;
+use crate::types::{CellMark, Maze, MazeOverlay, Vec2i};
+use crate::util::normalize_name;
 
-use crate::types::{Maze, MazeOverlay, Vec2i, normalize_name};
-
-pub(crate) const ALL_DIRS: [crate::types::Dir; 4] = [
-    crate::types::Dir::N,
-    crate::types::Dir::E,
-    crate::types::Dir::S,
-    crate::types::Dir::W,
-];
+pub(crate) use crate::types::ALL_DIRS;
 
 pub(crate) trait SolveStrategy {
     fn name(&self) -> &str;
@@ -37,11 +32,7 @@ const SOLVER_FACTORIES: [SolverFactory; 3] =
     [build_dfs_solver, build_bfs_solver, build_flood_fill_solver];
 
 fn random_index(len: usize) -> usize {
-    let seed = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .subsec_nanos();
-    (seed as usize) % len
+    (time_seed() as usize) % len
 }
 
 pub(crate) fn build_solver(maze: &Maze) -> Box<dyn SolveStrategy> {
@@ -63,5 +54,20 @@ pub(crate) fn find_solver_index(name: &str) -> Option<usize> {
 }
 
 pub(crate) fn build_solver_at(idx: usize, maze: &Maze) -> Box<dyn SolveStrategy> {
-    SOLVER_FACTORIES[idx % SOLVER_FACTORIES.len()](maze)
+    SOLVER_FACTORIES[idx](maze)
+}
+
+pub(crate) fn advance_reveal(
+    cursor: Vec2i,
+    start: Vec2i,
+    parent: &[Option<Vec2i>],
+    maze: &Maze,
+    overlay: &mut MazeOverlay,
+) -> (Option<Vec2i>, bool) {
+    overlay.set(maze.w, cursor, CellMark::Solution);
+    if cursor == start {
+        (None, true)
+    } else {
+        (parent[maze.idx(cursor)], false)
+    }
 }
