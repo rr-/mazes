@@ -252,15 +252,7 @@ fn main() -> io::Result<()> {
         }
         if phase == Phase::Solve && solver.as_ref().map_or(true, |s| s.done()) {
             phase = Phase::Complete;
-            viewer.print_footer(
-                &maze,
-                &format!(
-                    "Complete  ·  {} → {}",
-                    builder.name(),
-                    solver.as_ref().unwrap().name()
-                ),
-                "",
-            )?;
+            viewer.print_footer(&maze, "Complete", "")?;
         }
 
         // --- One tick: step + render, then read input ---
