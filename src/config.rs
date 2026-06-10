@@ -2,11 +2,11 @@ use std::{env, io, time::Duration};
 
 use crate::types::RenderStyle;
 
-const DEFAULT_BUILD_SLEEP_SECS: f64 = 0.005;
-const DEFAULT_SOLVE_SLEEP_SECS: f64 = 0.005;
+const DEFAULT_BUILD_SLEEP_SECS: f64 = 1.0 / 15.0;
+const DEFAULT_SOLVE_SLEEP_SECS: f64 = 1.0 / 15.0;
 const DEFAULT_WAIT_SECS: f64 = 2.0;
-const DEFAULT_BUILD_STEPS: usize = 5;
-const DEFAULT_SOLVE_STEPS: usize = 1;
+const DEFAULT_BUILD_STEPS: usize = 15;
+const DEFAULT_SOLVE_STEPS: usize = 15;
 
 pub(crate) struct Config {
     pub(crate) build_sleep: Duration,

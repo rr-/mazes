@@ -62,38 +62,113 @@ impl Drop for RawModeGuard {
     }
 }
 
-fn should_quit() -> io::Result<bool> {
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+enum Input {
+    None,
+    SkipSecond,
+    Advance,
+    TogglePause,
+    NewMaze,
+    Quit,
+}
+
+fn read_input() -> io::Result<Input> {
     let mut stdin = io::stdin();
-    let mut buf = [0_u8; 16];
+    let mut buf = [0_u8; 64];
+    let n = match stdin.read(&mut buf) {
+        Ok(0) | Err(_) => return Ok(Input::None),
+        Ok(n) => n,
+    };
+    let bytes = &buf[..n];
+
+    let mut result = Input::None;
+    let mut i = 0;
+    while i < bytes.len() {
+        let input = if bytes[i] == 0x1b && i + 2 < bytes.len() && bytes[i + 1] == b'[' {
+            let seq = match bytes[i + 2] {
+                b'C' => Input::SkipSecond, // →
+                _ => Input::None,
+            };
+            i += 3;
+            seq
+        } else {
+            let key = match bytes[i] {
+                4 | 27 | b'q' | b'Q' => Input::Quit,
+                b'n' | b'N' => Input::NewMaze,
+                b'p' | b'P' => Input::TogglePause,
+                b'.' => Input::Advance,
+                _ => Input::None,
+            };
+            i += 1;
+            key
+        };
+        if input > result {
+            result = input;
+        }
+    }
+    Ok(result)
+}
+
+/// Sleeps for `duration` in 10ms ticks, returning the highest-priority input seen.
+/// If `paused`, blocks indefinitely until any input arrives.
+fn sleep_and_read(duration: Duration, paused: bool) -> io::Result<Input> {
+    let tick = Duration::from_millis(10);
+    let mut remaining = duration;
     loop {
-        match stdin.read(&mut buf) {
-            Ok(0) => return Ok(false),
-            Ok(n) => {
-                if buf[..n]
-                    .iter()
-                    .any(|byte| matches!(byte, 4 | 27 | b'q' | b'Q'))
-                {
-                    return Ok(true);
-                }
-            }
-            Err(err) if err.kind() == io::ErrorKind::WouldBlock => return Ok(false),
-            Err(err) => return Err(err),
+        let input = read_input()?;
+        if input != Input::None {
+            return Ok(input);
+        }
+        if !paused && remaining == Duration::ZERO {
+            return Ok(Input::None);
+        }
+        thread::sleep(tick);
+        if !paused {
+            remaining = remaining.saturating_sub(tick);
         }
     }
 }
 
-fn pause_with_quit(duration: Duration) -> io::Result<bool> {
-    let tick = Duration::from_millis(10);
-    let mut remaining = duration;
-    while remaining > Duration::ZERO {
-        if should_quit()? {
-            return Ok(true);
+/// Runs enough steps to fill roughly one second of animation, then renders.
+fn skip_one_second_build(
+    config: &Config,
+    builder: &mut dyn builders::BuildStrategy,
+    maze: &mut Maze,
+    viewer: &dyn viewers::MazeView,
+) -> io::Result<()> {
+    let n = (1.0 / config.build_sleep.as_secs_f64()).ceil() as usize * config.build_steps;
+    let mut updated = Vec::new();
+    for _ in 0..n {
+        if builder.done() {
+            break;
         }
-        let step = remaining.min(tick);
-        thread::sleep(step);
-        remaining = remaining.saturating_sub(step);
+        updated.extend(builder.step(maze));
     }
-    should_quit()
+    if !updated.is_empty() {
+        viewer.update_maze(maze, updated)?;
+    }
+    Ok(())
+}
+
+fn skip_one_second_solve(
+    config: &Config,
+    solver: &mut dyn solvers::SolveStrategy,
+    maze: &Maze,
+    overlay: &mut MazeOverlay,
+    viewer: &dyn viewers::MazeView,
+) -> io::Result<()> {
+    let n = (1.0 / config.solve_sleep.as_secs_f64()).ceil() as usize * config.solve_steps;
+    let mut updated = Vec::new();
+    for _ in 0..n {
+        if solver.done() {
+            break;
+        }
+        updated.extend(solver.step(maze, overlay));
+    }
+    if !updated.is_empty() {
+        viewer.update_overlay(maze, overlay, updated)?;
+    }
+    Ok(())
 }
 
 fn main() -> io::Result<()> {
@@ -101,11 +176,9 @@ fn main() -> io::Result<()> {
     let _raw_mode = RawModeGuard::new()?;
     let viewer = build_viewer(config.style);
 
-    loop {
-        if should_quit()? {
-            break;
-        }
+    let mut paused = false;
 
+    'outer: loop {
         let (maze_w, maze_h) = maze_size_from_terminal(config.style);
         let mut maze = Maze::new(maze_w, maze_h);
         let mut overlay = MazeOverlay::new(maze_w, maze_h);
@@ -113,46 +186,134 @@ fn main() -> io::Result<()> {
 
         viewer.clear_screen()?;
         viewer.print(&maze)?;
+
+        // Build phase
         while !builder.done() {
-            if should_quit()? {
-                return Ok(());
+            if paused {
+                match sleep_and_read(Duration::ZERO, true)? {
+                    Input::Quit => break 'outer,
+                    Input::NewMaze => continue 'outer,
+                    Input::TogglePause => paused = false,
+                    Input::SkipSecond => {
+                        skip_one_second_build(
+                            &config,
+                            builder.as_mut(),
+                            &mut maze,
+                            viewer.as_ref(),
+                        )?;
+                        continue;
+                    }
+                    Input::Advance => {
+                        let mut updated = Vec::new();
+                        while updated.is_empty() && !builder.done() {
+                            updated.extend(builder.step(&mut maze));
+                        }
+                        viewer.update_maze(&maze, updated)?;
+                        continue;
+                    }
+                    Input::None => continue,
+                }
             }
 
             let mut updated = Vec::new();
-            for _ in 0..config.build_steps {
+            while updated.is_empty() {
+                for _ in 0..config.build_steps {
+                    if builder.done() {
+                        break;
+                    }
+                    updated.extend(builder.step(&mut maze));
+                }
                 if builder.done() {
                     break;
                 }
-                updated.extend(builder.step(&mut maze));
             }
             viewer.update_maze(&maze, updated)?;
-            if pause_with_quit(config.build_sleep)? {
-                return Ok(());
+
+            if paused {
+                continue;
+            }
+
+            match sleep_and_read(config.build_sleep, false)? {
+                Input::Quit => break 'outer,
+                Input::NewMaze => continue 'outer,
+                Input::TogglePause => paused = true,
+                Input::SkipSecond => {
+                    skip_one_second_build(&config, builder.as_mut(), &mut maze, viewer.as_ref())?
+                }
+                Input::Advance | Input::None => {}
             }
         }
 
         let mut solver = build_solver(&maze);
         overlay.clear();
+
+        // Solve phase
         while !solver.done() {
-            if should_quit()? {
-                return Ok(());
+            if paused {
+                match sleep_and_read(Duration::ZERO, true)? {
+                    Input::Quit => break 'outer,
+                    Input::NewMaze => continue 'outer,
+                    Input::TogglePause => paused = false,
+                    Input::SkipSecond => {
+                        skip_one_second_solve(
+                            &config,
+                            solver.as_mut(),
+                            &maze,
+                            &mut overlay,
+                            viewer.as_ref(),
+                        )?;
+                        continue;
+                    }
+                    Input::Advance => {
+                        let mut updated = Vec::new();
+                        while updated.is_empty() && !solver.done() {
+                            updated.extend(solver.step(&maze, &mut overlay));
+                        }
+                        viewer.update_overlay(&maze, &overlay, updated)?;
+                        continue;
+                    }
+                    Input::None => continue,
+                }
             }
 
             let mut updated = Vec::new();
-            for _ in 0..config.solve_steps {
+            while updated.is_empty() {
+                for _ in 0..config.solve_steps {
+                    if solver.done() {
+                        break;
+                    }
+                    updated.extend(solver.step(&maze, &mut overlay));
+                }
                 if solver.done() {
                     break;
                 }
-                updated.extend(solver.step(&maze, &mut overlay));
             }
             viewer.update_overlay(&maze, &overlay, updated)?;
-            if pause_with_quit(config.solve_sleep)? {
-                return Ok(());
+
+            if paused {
+                continue;
+            }
+
+            match sleep_and_read(config.solve_sleep, false)? {
+                Input::Quit => break 'outer,
+                Input::NewMaze => continue 'outer,
+                Input::TogglePause => paused = true,
+                Input::SkipSecond => skip_one_second_solve(
+                    &config,
+                    solver.as_mut(),
+                    &maze,
+                    &mut overlay,
+                    viewer.as_ref(),
+                )?,
+                Input::Advance | Input::None => {}
             }
         }
 
-        if pause_with_quit(config.wait)? {
-            break;
+        match sleep_and_read(config.wait, paused)? {
+            Input::Quit => break 'outer,
+            Input::NewMaze => continue 'outer,
+            Input::TogglePause => paused = !paused,
+            Input::SkipSecond | Input::Advance | Input::None => {}
         }
     }
 
