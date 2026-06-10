@@ -4,7 +4,7 @@ pub(crate) mod flood_fill;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::types::{Maze, MazeOverlay, Vec2i};
+use crate::types::{Maze, MazeOverlay, Vec2i, normalize_name};
 
 pub(crate) const ALL_DIRS: [crate::types::Dir; 4] = [
     crate::types::Dir::N,
@@ -47,4 +47,21 @@ fn random_index(len: usize) -> usize {
 pub(crate) fn build_solver(maze: &Maze) -> Box<dyn SolveStrategy> {
     let factory = SOLVER_FACTORIES[random_index(SOLVER_FACTORIES.len())];
     factory(maze)
+}
+
+pub(crate) fn solver_names() -> Vec<String> {
+    let dummy = Maze::new(5, 5);
+    SOLVER_FACTORIES
+        .iter()
+        .map(|f| normalize_name(f(&dummy).name()))
+        .collect()
+}
+
+pub(crate) fn find_solver_index(name: &str) -> Option<usize> {
+    let needle = normalize_name(name);
+    solver_names().into_iter().position(|n| n == needle)
+}
+
+pub(crate) fn build_solver_at(idx: usize, maze: &Maze) -> Box<dyn SolveStrategy> {
+    SOLVER_FACTORIES[idx % SOLVER_FACTORIES.len()](maze)
 }

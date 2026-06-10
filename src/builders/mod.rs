@@ -14,7 +14,7 @@ pub(crate) mod wilson;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::types::{Maze, Vec2i};
+use crate::types::{Maze, Vec2i, normalize_name};
 
 pub(crate) trait BuildStrategy {
     fn name(&self) -> &str;
@@ -111,4 +111,17 @@ pub(crate) fn build_builder_at(idx: usize, maze: &Maze) -> Box<dyn BuildStrategy
 pub(crate) fn build_builder(maze: &Maze) -> (usize, Box<dyn BuildStrategy>) {
     let idx = random_index(BUILDER_FACTORIES.len());
     (idx, BUILDER_FACTORIES[idx](maze))
+}
+
+pub(crate) fn builder_names() -> Vec<String> {
+    let dummy = Maze::new(5, 5);
+    BUILDER_FACTORIES
+        .iter()
+        .map(|f| normalize_name(f(&dummy).name()))
+        .collect()
+}
+
+pub(crate) fn find_builder_index(name: &str) -> Option<usize> {
+    let needle = normalize_name(name);
+    builder_names().into_iter().position(|n| n == needle)
 }

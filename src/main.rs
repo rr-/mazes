@@ -14,7 +14,7 @@ use std::{
 
 use builders::{build_builder, build_builder_at, builder_count};
 use config::Config;
-use solvers::{SolveStrategy, build_solver};
+use solvers::{SolveStrategy, build_solver, build_solver_at};
 use types::{Maze, MazeOverlay};
 use viewers::{build_viewer, maze_size_from_terminal};
 
@@ -200,13 +200,16 @@ enum Phase {
 }
 
 fn main() -> io::Result<()> {
-    let config = Config::from_args()?;
+    let config = Config::from_args().unwrap_or_else(|e| {
+        eprintln!("error: {e}");
+        std::process::exit(1);
+    });
     let _raw_mode = RawModeGuard::new()?;
     let viewer = build_viewer(config.style);
 
     let mut paused = false;
-    let mut random_mode = true;
-    let mut builder_idx: Option<usize> = None;
+    let mut random_mode = config.random;
+    let mut builder_idx: Option<usize> = config.builder;
 
     // --- helpers that set up a fresh maze ---
     let init_maze = |builder_idx: &mut Option<usize>,
@@ -241,7 +244,10 @@ fn main() -> io::Result<()> {
     loop {
         // --- Phase transitions ---
         if phase == Phase::Build && builder.done() {
-            solver = Some(build_solver(&maze));
+            solver = Some(match config.solver {
+                Some(idx) => build_solver_at(idx, &maze),
+                None => build_solver(&maze),
+            });
             overlay.clear();
             phase = Phase::Solve;
             viewer.print_footer(
