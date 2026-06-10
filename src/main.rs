@@ -474,6 +474,9 @@ fn main() -> io::Result<()> {
         }
 
         if start_new_maze {
+            if random_mode {
+                builder_idx = None;
+            }
             (maze, overlay, builder) = init_maze(&mut builder_idx);
             solver = None;
             phase = Phase::Build;

@@ -103,7 +103,6 @@ impl Config {
                             ),
                         )
                     })?);
-                    random = Some(false);
                 }
                 "-s" | "--solver" => {
                     let value = args.next().ok_or_else(|| {
@@ -123,7 +122,6 @@ impl Config {
                     })?);
                 }
                 "-r" | "--random" => {
-                    builder = None;
                     random = Some(true);
                 }
                 _ => {
