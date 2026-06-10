@@ -41,7 +41,13 @@ fn render_half_blocks(maze: &Maze, overlay: Option<&MazeOverlay>) -> Vec<Vec<Hal
             let gy = y * 2 + 1;
             let gx = x * 2 + 1;
 
-            pixels[gy][gx] = HalfBlockPixel::Empty;
+            let all_walled = c.wall[Dir::N as usize]
+                && c.wall[Dir::S as usize]
+                && c.wall[Dir::E as usize]
+                && c.wall[Dir::W as usize];
+            if !all_walled {
+                pixels[gy][gx] = HalfBlockPixel::Empty;
+            }
             if !c.wall[Dir::N as usize] {
                 pixels[gy - 1][gx] = HalfBlockPixel::Empty;
             }
@@ -53,6 +59,20 @@ fn render_half_blocks(maze: &Maze, overlay: Option<&MazeOverlay>) -> Vec<Vec<Hal
             }
             if !c.wall[Dir::E as usize] {
                 pixels[gy][gx + 1] = HalfBlockPixel::Empty;
+            }
+        }
+    }
+
+    // Clear junction pixels (even row, even col) whose 4 adjacent wall segments are all open.
+    // This prevents a dotted-grid artifact in fully-open regions (e.g. Recursive Division init).
+    for row in (2..virtual_rows - 1).step_by(2) {
+        for col in (2..cols - 1).step_by(2) {
+            if matches!(pixels[row - 1][col], HalfBlockPixel::Empty)
+                && matches!(pixels[row + 1][col], HalfBlockPixel::Empty)
+                && matches!(pixels[row][col - 1], HalfBlockPixel::Empty)
+                && matches!(pixels[row][col + 1], HalfBlockPixel::Empty)
+            {
+                pixels[row][col] = HalfBlockPixel::Empty;
             }
         }
     }

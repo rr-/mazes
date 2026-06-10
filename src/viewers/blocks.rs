@@ -32,7 +32,13 @@ fn render_blocks(maze: &Maze, overlay: Option<&MazeOverlay>) -> Vec<Vec<u8>> {
             let gy = y * 2 + 1;
             let gx = x * 2 + 1;
 
-            buf[gy][gx] = block_pixel_color(BlockPixel::Empty);
+            let all_walled = c.wall[Dir::N as usize]
+                && c.wall[Dir::S as usize]
+                && c.wall[Dir::E as usize]
+                && c.wall[Dir::W as usize];
+            if !all_walled {
+                buf[gy][gx] = block_pixel_color(BlockPixel::Empty);
+            }
             if !c.wall[Dir::N as usize] {
                 buf[gy - 1][gx] = block_pixel_color(BlockPixel::Empty);
             }
@@ -44,6 +50,22 @@ fn render_blocks(maze: &Maze, overlay: Option<&MazeOverlay>) -> Vec<Vec<u8>> {
             }
             if !c.wall[Dir::E as usize] {
                 buf[gy][gx + 1] = block_pixel_color(BlockPixel::Empty);
+            }
+        }
+    }
+
+    // Clear junction pixels (even row, even col) whose 4 adjacent wall segments are all open.
+    let wall_color = block_pixel_color(BlockPixel::Wall);
+    let empty_color = block_pixel_color(BlockPixel::Empty);
+    for row in (2..rows - 1).step_by(2) {
+        for col in (2..cols - 1).step_by(2) {
+            if buf[row - 1][col] == empty_color
+                && buf[row + 1][col] == empty_color
+                && buf[row][col - 1] == empty_color
+                && buf[row][col + 1] == empty_color
+                && buf[row][col] == wall_color
+            {
+                buf[row][col] = empty_color;
             }
         }
     }
