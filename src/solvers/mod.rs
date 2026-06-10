@@ -1,5 +1,6 @@
 pub(crate) mod bfs;
 pub(crate) mod dfs;
+pub(crate) mod flood_fill;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -27,7 +28,12 @@ fn build_bfs_solver(maze: &Maze) -> Box<dyn SolveStrategy> {
     Box::new(bfs::BfsSolver::new(maze))
 }
 
-const SOLVER_FACTORIES: [SolverFactory; 2] = [build_dfs_solver, build_bfs_solver];
+fn build_flood_fill_solver(maze: &Maze) -> Box<dyn SolveStrategy> {
+    Box::new(flood_fill::FloodFillSolver::new(maze))
+}
+
+const SOLVER_FACTORIES: [SolverFactory; 3] =
+    [build_dfs_solver, build_bfs_solver, build_flood_fill_solver];
 
 fn random_index(len: usize) -> usize {
     let seed = SystemTime::now()
