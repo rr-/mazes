@@ -179,9 +179,10 @@ fn tick_build(
     paused: bool,
 ) -> io::Result<Input> {
     if !paused {
+        let steps = config.build_steps * builder.step_hint();
         let mut updated = Vec::new();
         while updated.is_empty() {
-            for _ in 0..config.build_steps {
+            for _ in 0..steps {
                 if builder.done() {
                     break;
                 }

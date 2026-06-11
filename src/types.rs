@@ -5,7 +5,7 @@ pub(crate) enum RenderStyle {
     HalfBlocks,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub(crate) enum Dir {
     N,
     E,
