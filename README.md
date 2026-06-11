@@ -2,6 +2,8 @@
 
 Terminal maze generator and solver. Watches mazes build themselves, then watches them get solved.
 
+![How it looks](screen.png)
+
 ```
 just run
 just run -- --builder recursive-backtracker --solver bfs
